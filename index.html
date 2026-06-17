@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Shutdown" />
+  <title>Shutdown</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --border: #1e1e2e;
+      --red: #e03c3c;
+      --red-glow: rgba(224, 60, 60, 0.25);
+      --red-dim: #8b2020;
+      --text: #e8e8f0;
+      --muted: #6b6b88;
+      --input-bg: #0d0d14;
+      --success: #3ce07a;
+      --warning: #e0b43c;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: env(safe-area-inset-top, 20px) 24px env(safe-area-inset-bottom, 20px);
+      gap: 0;
+    }
+
+    .header {
+      position: absolute;
+      top: env(safe-area-inset-top, 20px);
+      left: 0; right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 24px;
+    }
+
+    .header-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      margin-right: 8px;
+      transition: background 0.3s;
+    }
+    .header-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+    .header-dot.error { background: var(--red); }
+
+    .header-label {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* Settings gear */
+    .settings-btn {
+      position: absolute;
+      right: 24px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 18px;
+      line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── MAIN SCREEN ── */
+    .main-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 40px;
+      width: 100%;
+    }
+
+    .shutdown-btn {
+      position: relative;
+      width: 180px; height: 180px;
+      border-radius: 50%;
+      border: 2px solid var(--red-dim);
+      background: radial-gradient(circle at 50% 60%, rgba(224,60,60,0.08) 0%, transparent 70%);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s, border-color 0.2s, box-shadow 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      outline: none;
+    }
+
+    .shutdown-btn:active {
+      transform: scale(0.94);
+      border-color: var(--red);
+      box-shadow: 0 0 40px var(--red-glow), inset 0 0 20px rgba(224,60,60,0.1);
+    }
+
+    .shutdown-btn.armed {
+      border-color: var(--red);
+      box-shadow: 0 0 30px var(--red-glow);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 20px var(--red-glow); }
+      50% { box-shadow: 0 0 50px var(--red-glow), 0 0 80px rgba(224,60,60,0.1); }
+    }
+
+    .power-icon {
+      width: 64px; height: 64px;
+      stroke: var(--red-dim);
+      transition: stroke 0.2s;
+    }
+    .shutdown-btn.armed .power-icon,
+    .shutdown-btn:active .power-icon { stroke: var(--red); }
+
+    .btn-label {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: -20px;
+    }
+
+    /* Password input section */
+    .pw-section {
+      width: 100%;
+      max-width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .pw-label {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .pw-input-wrap {
+      position: relative;
+    }
+
+    .pw-input {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 44px 14px 16px;
+      color: var(--text);
+      font-size: 16px; /* prevents iOS zoom */
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .pw-input:focus { border-color: var(--red-dim); }
+    .pw-input.error { border-color: var(--red); }
+
+    .pw-toggle {
+      position: absolute;
+      right: 14px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none;
+      color: var(--muted); cursor: pointer;
+      padding: 4px; font-size: 16px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* URL setting */
+    .url-input {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      -webkit-appearance: none;
+      transition: border-color 0.2s;
+    }
+    .url-input:focus { border-color: var(--red-dim); }
+
+    /* Status bar */
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      min-height: 20px;
+      transition: color 0.3s;
+    }
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--red); }
+    .status.warn { color: var(--warning); }
+
+    /* Settings panel */
+    .settings-panel {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .settings-panel.visible { display: flex; }
+
+    .settings-title {
+      font-size: 16px;
+      font-weight: 600;
+      text-align: center;
+      color: var(--text);
+    }
+
+    .field-label {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .save-btn {
+      background: var(--red);
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s;
+    }
+    .save-btn:active { opacity: 0.8; }
+
+    .back-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      color: var(--muted);
+      font-size: 15px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: none;
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+    .spinner.visible { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-dot" id="statusDot"></div>
+  <span class="header-label" id="headerLabel">Not configured</span>
+  <button class="settings-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+</div>
+
+<!-- MAIN SCREEN -->
+<div class="main-screen" id="mainScreen">
+  <button class="shutdown-btn" id="shutdownBtn" aria-label="Shut down PC">
+    <svg class="power-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 3v9"/>
+      <path d="M5.636 5.636a9 9 0 1 0 12.728 0"/>
+    </svg>
+  </button>
+
+  <div class="pw-section">
+    <div class="pw-label">VeraCrypt Password</div>
+    <div class="pw-input-wrap">
+      <input type="password" class="pw-input" id="pwInput" placeholder="Enter password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+      <button class="pw-toggle" id="pwToggle" aria-label="Show password">👁</button>
+    </div>
+  </div>
+
+  <div class="spinner" id="spinner"></div>
+  <div class="status" id="status"></div>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-title">Settings</div>
+  <div>
+    <div class="field-label">Server URL</div>
+    <input type="url" class="url-input" id="urlInput" placeholder="https://your-tunnel.trycloudflare.com" />
+  </div>
+  <button class="save-btn" id="saveBtn">Save</button>
+  <button class="back-btn" id="backBtn">Back</button>
+</div>
+
+<script>
+  // ── Storage ──────────────────────────────────────────────────────────────
+  const getUrl = () => localStorage.getItem("shutdown_url") || "";
+  const setUrl = (v) => localStorage.setItem("shutdown_url", v.trim().replace(/\/$/, ""));
+
+  // ── UI refs ──────────────────────────────────────────────────────────────
+  const shutdownBtn = document.getElementById("shutdownBtn");
+  const pwInput = document.getElementById("pwInput");
+  const pwToggle = document.getElementById("pwToggle");
+  const spinner = document.getElementById("spinner");
+  const statusEl = document.getElementById("status");
+  const statusDot = document.getElementById("statusDot");
+  const headerLabel = document.getElementById("headerLabel");
+  const settingsBtn = document.getElementById("settingsBtn");
+  const settingsPanel = document.getElementById("settingsPanel");
+  const mainScreen = document.getElementById("mainScreen");
+  const urlInput = document.getElementById("urlInput");
+  const saveBtn = document.getElementById("saveBtn");
+  const backBtn = document.getElementById("backBtn");
+
+  // ── Init ─────────────────────────────────────────────────────────────────
+  function init() {
+    const url = getUrl();
+    if (url) {
+      headerLabel.textContent = "Ready";
+      statusDot.className = "header-dot connected";
+    } else {
+      headerLabel.textContent = "Tap ⚙ to configure";
+      statusDot.className = "header-dot error";
+    }
+  }
+  init();
+
+  // ── Settings ─────────────────────────────────────────────────────────────
+  settingsBtn.addEventListener("click", () => {
+    urlInput.value = getUrl();
+    mainScreen.style.display = "none";
+    settingsPanel.classList.add("visible");
+  });
+
+  saveBtn.addEventListener("click", () => {
+    setUrl(urlInput.value);
+    settingsPanel.classList.remove("visible");
+    mainScreen.style.display = "flex";
+    init();
+    setStatus("URL saved.", "ok");
+  });
+
+  backBtn.addEventListener("click", () => {
+    settingsPanel.classList.remove("visible");
+    mainScreen.style.display = "flex";
+  });
+
+  // ── Password toggle ───────────────────────────────────────────────────────
+  pwToggle.addEventListener("click", () => {
+    const shown = pwInput.type === "text";
+    pwInput.type = shown ? "password" : "text";
+    pwToggle.textContent = shown ? "👁" : "🙈";
+  });
+
+  // ── Status helper ─────────────────────────────────────────────────────────
+  function setStatus(msg, type = "") {
+    statusEl.textContent = msg;
+    statusEl.className = "status" + (type ? " " + type : "");
+  }
+
+  function setLoading(on) {
+    spinner.className = "spinner" + (on ? " visible" : "");
+    shutdownBtn.disabled = on;
+    pwInput.disabled = on;
+  }
+
+  // ── AES-256 crypto (Web Crypto API) ───────────────────────────────────────
+  async function deriveKey(password, salt) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw", enc.encode(password), "PBKDF2", false, ["deriveBits", "deriveKey"]
+    );
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: 310_000, hash: "SHA-256" },
+      keyMaterial,
+      { name: "AES-CBC", length: 256 },
+      false,
+      ["encrypt"]
+    );
+  }
+
+  async function encryptPayload(password, plaintext) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(16));
+    const key = await deriveKey(password, salt);
+    const enc = new TextEncoder();
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: "AES-CBC", iv },
+      key,
+      enc.encode(plaintext)
+    );
+    // Pack: [16 salt][16 iv][N ciphertext]
+    const combined = new Uint8Array(16 + 16 + ciphertext.byteLength);
+    combined.set(salt, 0);
+    combined.set(iv, 16);
+    combined.set(new Uint8Array(ciphertext), 32);
+    return btoa(String.fromCharCode(...combined));
+  }
+
+  // ── Shutdown flow ─────────────────────────────────────────────────────────
+  shutdownBtn.addEventListener("click", async () => {
+    const url = getUrl();
+    const password = pwInput.value;
+
+    if (!url) {
+      setStatus("Configure server URL in settings first.", "err");
+      return;
+    }
+    if (!password) {
+      pwInput.classList.add("error");
+      setStatus("Enter your password.", "err");
+      pwInput.focus();
+      setTimeout(() => pwInput.classList.remove("error"), 2000);
+      return;
+    }
+
+    setLoading(true);
+    shutdownBtn.classList.add("armed");
+    setStatus("Connecting...", "warn");
+
+    try {
+      // Step 1: Get nonce
+      setStatus("Requesting challenge...", "warn");
+      const challengeRes = await fetch(`${url}/challenge`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!challengeRes.ok) throw new Error(`Server error: ${challengeRes.status}`);
+      const { nonce } = await challengeRes.json();
+
+      // Step 2: Encrypt payload
+      setStatus("Encrypting command...", "warn");
+      const payload = await encryptPayload(password, `SHUTDOWN:${nonce}`);
+
+      // Step 3: Send shutdown command
+      setStatus("Sending shutdown command...", "warn");
+      const shutdownRes = await fetch(`${url}/shutdown`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload }),
+      });
+
+      if (!shutdownRes.ok) {
+        const err = await shutdownRes.json().catch(() => ({}));
+        throw new Error(err.error || `Server error: ${shutdownRes.status}`);
+      }
+
+      setStatus("✓ PC is shutting down.", "ok");
+      shutdownBtn.classList.remove("armed");
+      pwInput.value = "";
+
+    } catch (err) {
+      shutdownBtn.classList.remove("armed");
+      if (err.message.includes("fetch") || err.message.includes("network") || err.message.includes("Failed")) {
+        setStatus("Can't reach server. Check URL or internet.", "err");
+      } else if (err.message.toLowerCase().includes("decrypt") || err.message.toLowerCase().includes("wrong")) {
+        setStatus("Wrong password.", "err");
+      } else {
+        setStatus(err.message, "err");
+      }
+    } finally {
+      setLoading(false);
+    }
+  });
+</script>
+</body>
+</html>
